@@ -26,7 +26,7 @@ y0 = [r0_nept; 0; 0; v0_nept; r0_9; 0; 0; v0_9];
 tspan = [0 150000]; % Years - ADJUST AS NEEDED... over long periods of time you can really see the drift between 2BP and 3BP (Figure 2)
 
 % Solve ODE
-options = odeset('RelTol', 1e-8);
+options = odeset('RelTol', 1e-9);
 [t, sol] = ode45(@(t, y) n_body_system(t, y, G, M_sun, M_neptune, M_9), tspan, y0, options);
 
 %% Neptune-Sun 2BP
@@ -35,7 +35,8 @@ mu = 4 * pi^2; % Gravitational parameter for the Sun
 state_nept_2BP = [r0_nept; 0; 0; v0_nept];
 [tN, solN] = ode45(@(t2, y2) gravity_ode(t2, y2, mu), tspan, state_nept_2BP, options);
 
-%% Plots
+%% PLOTS
+%% Orbital Paths
 figure('Color', 'w', 'Position', [100, 100, 900, 400]);
 
 % Subplot 1: Solar System
@@ -57,6 +58,7 @@ xlim([-29.9 -29.7]); ylim([-0.1 0.1]);
 grid on;
 hold off
 
+%% Difference in 2BP and 3BP Models
 % Calculate the distance between the Neptune's expected position without Nine and its expected position with Nine
 dist_difference = sqrt((sol(:,1) - solN(:,1)).^2 + (sol(:,2) - solN(:,2)).^2);
 t_plot = t(1:end-5); % Remove last few points for plotting
@@ -70,6 +72,17 @@ xlabel('Years');
 ylabel('Displacement (km)');
 grid on;
 
+%% Numerical Error - How wrong is figure 2 due to truncation error? If error was zero, AU over tspan would be constant in figure 3
+% Calculate Semi-Major Axis for every point in time
+% Formula: a = -G*M*s / (v^2 - 2*G*Ms/r)
+r_n = sqrt(solN(:,1).^2 + solN(:,2).^2);
+v_n = sqrt(solN(:,3).^2 + solN(:,4).^2);
+a_n_over_time = -G*M_sun ./ (v_n.^2 - 2*G*M_sun./r_n);
+
+figure;
+plot(t, a_n_over_time);
+title('Check for Numerical Drift (Semi-Major Axis)');
+ylabel('AU'); xlabel('Years');
 %% 3BP ODE Fn
 function dydt = n_body_system(~, y, G, Ms, Mn, M9)
     % Extract positions
