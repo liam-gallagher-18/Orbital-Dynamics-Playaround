@@ -6,3 +6,4 @@ It propagates Neptune's motion considering the effects of the Sun and the theori
 While figure 1 shows that the difference between the two models is minimal within one of Neptune's orbital periods, figure 2 plots the difference between the two models over time.
 I recommend setting tspan to a large period of time (several of Nine's orbital periods [1 = 15,000 years]) to really see the difference. Currently it is set to 10 orbital periods of Planet Nine (150,000 years).
 Focusing on smaller periods of time can expose interesting patterns as well.
+Figure 3 plots numerical/truncation error, to show what amount of the drift in figure 2 is dominated by this error. Should be low, even for tspan = 150,000-year.
