@@ -6,7 +6,7 @@ clc; clear; close all;
 
 % Constants (Units: AU and Years)
 mu = 4 * pi^2; % Gravitational parameter for the Sun
-tspan = [0 1]; % Simulate for 1 year
+tspan = [0 2]; % Simulate for 2 years
 
 % Planetary Data (Semi-major axis and Eccentricity)
 % Mercury
@@ -18,8 +18,11 @@ e_ven = 0.0067;
 % Earth
 a_earth = 1;  
 e_earth = 0.017;
+% Mars
+a_mars = 1.524;  
+e_mars = 0.0934;
 
-% Initial Conditions, Use: r_p = a(1-e), v_p = sqrt( mu/a * (1+e)/(1-e) )
+% Initial Conditions, Use: r_p = a*(1-e), v_p = sqrt(mu/a*(1+e)/(1-e))
 
 % Mercury Initial [x; y; vx; vy]
 r0_merc = a_merc * (1 - e_merc);
@@ -36,11 +39,17 @@ r0_earth = a_earth * (1 - e_earth);
 v0_earth = sqrt(mu/a_earth * (1 + e_earth)/(1 - e_earth));
 state0_earth = [r0_earth; 0; 0; v0_earth];
 
+% Mars Initial [x; y; vx; vy]
+r0_mars = a_mars * (1 - e_mars);
+v0_mars = sqrt(mu/a_mars * (1 + e_mars)/(1 - e_mars));
+state0_mars = [r0_mars; 0; 0; v0_mars];
+
 % Numerical Integration
 options = odeset('RelTol', 1e-8);
 [tM, solM] = ode45(@(t, y) gravity_ode(t, y, mu), tspan, state0_merc, options);
 [tV, solV] = ode45(@(t, y) gravity_ode(t, y, mu), tspan, state0_ven, options);
 [tE, solE] = ode45(@(t, y) gravity_ode(t, y, mu), tspan, state0_earth, options);
+[tMa, solMa] = ode45(@(t, y) gravity_ode(t, y, mu), tspan, state0_mars, options);
 
 % Plotting and Animation
 figure('Color', 'k'); 
@@ -59,12 +68,13 @@ plot(0, 0, 'yo', 'MarkerSize', 10, 'MarkerFaceColor', 'y');
 plot(solM(:,1), solM(:,2), 'r--');
 plot(solV(:,1), solV(:,2), 'w--');
 plot(solE(:,1), solE(:,2), 'g--');
+plot(solMa(:,1), solMa(:,2), 'r--');
 
 % Moving handles for animation
 hM = plot(solM(1,1), solM(1,2), 'ro', 'MarkerFaceColor', 'r', 'MarkerSize', 6); % Mercury
 hV = plot(solV(1,1), solV(1,2), 'co', 'MarkerFaceColor', 'c', 'MarkerSize', 8); % Venus
 hE = plot(solE(1,1), solE(1,2), 'go', 'MarkerFaceColor', 'g', 'MarkerSize', 8); % Earth
-% legend('Sun', 'Mercury Orbit', 'Venus Orbit', 'Mercury', 'Venus', 'TextColor', 'w');
+hMa = plot(solMa(1,1), solMa(1,2), 'ro', 'MarkerFaceColor', 'r', 'MarkerSize', 3); % Mars
 
 % Animation Loop
 for i = 1:length(tM)
@@ -78,6 +88,9 @@ for i = 1:length(tM)
 
     posE = interp1(tE, solE(:,1:2), tM(i));
     set(hE, 'XData', posE(1), 'YData', posE(2));
+    
+    posMa = interp1(tMa, solMa(:,1:2), tM(i));
+    set(hMa, 'XData', posMa(1), 'YData', posMa(2));
     
     drawnow;
     pause(0.02); % Slow down animation to see it
