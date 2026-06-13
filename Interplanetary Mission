@@ -1,0 +1,153 @@
+import numpy as np
+import matplotlib.pyplot as plt
+from scipy.integrate import solve_ivp
+from matplotlib.animation import FuncAnimation
+from IPython.display import HTML  # Required for Jupyter
+
+# Setup
+mu = 4 * np.pi**2 
+t_start, t_end = 0, 20
+dt = 0.01
+t_eval = np.arange(t_start, t_end, dt)
+
+def gravity_ode(t, state):
+    x, y, vx, vy = state
+    r = np.sqrt(x**2 + y**2)
+    return [vx, vy, -mu*x/r**3, -mu*y/r**3]
+
+# Planets
+planet_configs = [
+    [0.387, 0.2056, 'gray', 'Mercury'],
+    [0.723, 0.0067, 'orange', 'Venus'],
+    [1.000, 0.0170, 'blue', 'Earth'],
+    [1.524, 0.0934, 'red', 'Mars']
+]
+
+planets = {}
+for a, e, color, name in planet_configs:
+    r0 = a * (1 - e)
+    v0 = np.sqrt(mu / a * (1 + e) / (1 - e))
+    state0 = [r0, 0, 0, v0]
+    sol = solve_ivp(
+        gravity_ode, 
+        (t_start, t_end), 
+        state0, 
+        t_eval=t_eval,
+        method='DOP853', # A high-order solver (8th order) for accurate orbits
+        rtol=1e-11,      # Tight relative tolerance
+        atol=1e-12       # Tight absolute tolerance
+    )
+    planets[name] = {
+        'x': sol.y[0], 
+        'y': sol.y[1], 
+        'vx': sol.y[2], 
+        'vy': sol.y[3], 
+        'color': color
+    }
+# Spacecraft!
+# CHANGE THESE TO PLAY AROUND
+origin = 'Earth'
+destination = 'Mars'
+reach_time = 20  # Time to reach destination in years
+
+def solve_lambert(r1, r2, dt, mu, max_iter=100):
+    """Simple Lambert Solver using Universal Variables"""
+    r1_mag = np.linalg.norm(r1)
+    r2_mag = np.linalg.norm(r2)
+    cos_theta = np.dot(r1, r2) / (r1_mag * r2_mag)
+    theta = np.arccos(np.clip(cos_theta, -1, 1))
+    if np.cross(r1, r2) < 0: theta = 2*np.pi - theta # Prograde orbit
+    
+    A = np.sin(theta) * np.sqrt(r1_mag * r2_mag / (1 - np.cos(theta)))
+    z = 0.0
+    for _ in range(max_iter):
+        if z > 1e-6:
+            C = (1 - np.cos(np.sqrt(z))) / z
+            S = (np.sqrt(z) - np.sin(np.sqrt(z))) / np.sqrt(z**3)
+        elif z < -1e-6:
+            C = (1 - np.cosh(np.sqrt(-z))) / z
+            S = (np.sinh(np.sqrt(-z)) - np.sqrt(-z)) / np.sqrt((-z)**3)
+        else:
+            C, S = 0.5, 1/6
+            
+        y = r1_mag + r2_mag + A * (z * S - 1) / np.sqrt(C)
+        if A > 0 and y < 0: z += 0.1; continue 
+        
+        chi = np.sqrt(y / C)
+        dt_new = (chi**3 * S + A * np.sqrt(y)) / np.sqrt(mu)
+        
+        dz = 1e-5
+        z2 = z + dz
+        C2 = (1 - np.cos(np.sqrt(z2))) / z2 if z2 > 0 else 0.5
+        S2 = (np.sqrt(z2) - np.sin(np.sqrt(z2))) / np.sqrt(z2**3) if z2 > 0 else 1/6
+        y2 = r1_mag + r2_mag + A * (z2 * S2 - 1) / np.sqrt(C2)
+        dt_z2 = (np.sqrt(y2/C2)**3 * S2 + A * np.sqrt(y2)) / np.sqrt(mu)
+        f_prime = (dt_z2 - dt_new) / dz
+        
+        z_new = z - (dt_new - dt) / f_prime
+        if abs(z_new - z) < 1e-8: break
+        z = z_new
+
+    f = 1 - y / r1_mag
+    g = A * np.sqrt(y / mu)
+    v1 = (r2 - f * r1) / g
+    return v1
+# 1. Calculate positions at t=0 and t=reach_time
+idx_reach = np.argmin(np.abs(t_eval - reach_time))
+r_start = np.array([planets[origin]['x'][0], planets[origin]['y'][0]])
+r_end = np.array([planets[destination]['x'][idx_reach], planets[destination]['y'][idx_reach]])
+
+# 2. Solve for required velocity and calculate Delta-V
+v_sc_start = solve_lambert(r_start, r_end, reach_time, mu)
+v_p1_start = np.array([planets[origin]['vx'][0], planets[origin]['vy'][0]])
+dv_dep = np.linalg.norm(v_sc_start - v_p1_start)
+
+# 3. Propagate the spacecraft path
+sc_sol = solve_ivp(gravity_ode, (0, reach_time), 
+                   [r_start[0], r_start[1], v_sc_start[0], v_sc_start[1]], 
+                   t_eval=t_eval[t_eval <= reach_time], method='DOP853')
+
+# 4. Arrival Delta-V
+v_sc_end = np.array([sc_sol.y[2][-1], sc_sol.y[3][-1]])
+v_p2_end = np.array([planets[destination]['vx'][idx_reach], planets[destination]['vy'][idx_reach]])
+dv_arr = np.linalg.norm(v_sc_end - v_p2_end)
+
+print(f"Transfer: {origin} -> {destination} ({reach_time} years)")
+print(f"Departure ΔV: {dv_dep:.4f} AU/yr | Arrival ΔV: {dv_arr:.4f} AU/yr")
+print(f"Total ΔV:     {dv_dep + dv_arr:.4f} AU/yr")
+
+# Animation
+fig, ax = plt.subplots(figsize=(7, 7), facecolor='black')
+ax.set_facecolor('black')
+ax.set_xlim(-1.8, 1.8); ax.set_ylim(-1.8, 1.8); ax.set_aspect('equal'); ax.axis('off')
+ax.plot(0, 0, 'yo', markersize=12) # Sun
+
+for name, p in planets.items():
+    ax.plot(p['x'], p['y'], color=p['color'], alpha=0.2, lw=1) # Orbits
+    p['point'], = ax.plot([], [], 'o', color=p['color'], markersize=6, label=name)
+
+sc_point, = ax.plot([], [], 'w*', markersize=10, label='Spacecraft')
+sc_trail, = ax.plot([], [], 'w--', alpha=0.5, lw=1)
+
+def update(frame):
+    for name, p in planets.items():
+        p['point'].set_data([p['x'][frame]], [p['y'][frame]])
+    
+    # Update Spacecraft
+    if frame < len(sc_sol.t):
+        sc_point.set_data([sc_sol.y[0][frame]], [sc_sol.y[1][frame]])
+        sc_trail.set_data(sc_sol.y[0][:frame], sc_sol.y[1][:frame])
+    else:
+        # After reach_time, spacecraft "rides" with the destination planet
+        sc_point.set_data([planets[destination]['x'][frame]], [planets[destination]['y'][frame]])
+        sc_trail.set_data(sc_sol.y[0], sc_sol.y[1])
+          
+    return []
+
+ani = FuncAnimation(fig, update, frames=len(t_eval), interval=20, blit=True)
+
+# Prevent a duplicate static plot from showing up
+plt.close() 
+
+# Convert the animation to HTML5
+HTML(ani.to_jshtml())
