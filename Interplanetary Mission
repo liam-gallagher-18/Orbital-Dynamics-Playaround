@@ -6,7 +6,7 @@ from IPython.display import HTML  # Required for Jupyter
 
 # Setup
 mu = 4 * np.pi**2 
-t_start, t_end = 0, 20
+t_start, t_end = 0, 0.2
 dt = 0.01
 t_eval = np.arange(t_start, t_end, dt)
 
@@ -47,8 +47,8 @@ for a, e, color, name in planet_configs:
 # Spacecraft!
 # CHANGE THESE TO PLAY AROUND
 origin = 'Earth'
-destination = 'Mars'
-reach_time = 20  # Time to reach destination in years
+destination = 'Venus'
+reach_time = 0.2  # Time to reach destination in years
 
 def solve_lambert(r1, r2, dt, mu, max_iter=100):
     """Simple Lambert Solver using Universal Variables"""
@@ -141,7 +141,7 @@ def update(frame):
         # After reach_time, spacecraft "rides" with the destination planet
         sc_point.set_data([planets[destination]['x'][frame]], [planets[destination]['y'][frame]])
         sc_trail.set_data(sc_sol.y[0], sc_sol.y[1])
-          
+        
     return []
 
 ani = FuncAnimation(fig, update, frames=len(t_eval), interval=20, blit=True)
